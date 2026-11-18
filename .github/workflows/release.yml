@@ -1,0 +1,56 @@
+name: Windows release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          architecture: x64
+      - name: Install locked build dependencies
+        run: |
+          python -m pip install uv
+          uv sync --locked --group build
+      - name: Build and smoke-test Vid2text
+        run: |
+          uv run --no-sync pyinstaller --noconfirm Vid2text.spec
+          $exe = (Resolve-Path dist/Vid2text/Vid2text.exe).Path
+          $smoke = Start-Process -FilePath $exe -ArgumentList '--smoke-test' -WindowStyle Hidden -PassThru
+          if (-not $smoke.WaitForExit(90000)) {
+            $smoke.Kill()
+            throw 'Vid2text smoke test timed out.'
+          }
+          if ($smoke.ExitCode -ne 0) { throw "Vid2text smoke test failed ($($smoke.ExitCode))." }
+      - name: Archive release and calculate checksum
+        run: |
+          Copy-Item README.md dist/Vid2text
+          $zip = "Vid2text-$env:GITHUB_REF_NAME-windows-x64.zip"
+          Compress-Archive -Path dist/Vid2text -DestinationPath $zip
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLowerInvariant()
+          "$hash  $zip" | Set-Content -Encoding ascii "$zip.sha256"
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $zip = "Vid2text-$env:GITHUB_REF_NAME-windows-x64.zip"
+          gh release create $env:GITHUB_REF_NAME $zip "$zip.sha256" --repo $env:GITHUB_REPOSITORY --verify-tag --generate-notes
