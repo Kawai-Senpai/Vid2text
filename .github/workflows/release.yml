@@ -2,8 +2,11 @@ name: Windows release
 
 on:
   push:
+    branches:
+      - master
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -42,15 +45,30 @@ jobs:
           }
           if ($smoke.ExitCode -ne 0) { throw "Vid2text smoke test failed ($($smoke.ExitCode))." }
       - name: Archive release and calculate checksum
+        id: archive
         run: |
           Copy-Item README.md dist/Vid2text
-          $zip = "Vid2text-$env:GITHUB_REF_NAME-windows-x64.zip"
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME } else { $env:GITHUB_SHA.Substring(0, 7) }
+          $zip = "Vid2text-$version-windows-x64.zip"
           Compress-Archive -Path dist/Vid2text -DestinationPath $zip
           $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLowerInvariant()
           "$hash  $zip" | Set-Content -Encoding ascii "$zip.sha256"
+          "zip=$zip" >> $env:GITHUB_OUTPUT
+      - name: Upload Windows build
+        if: github.event_name != 'push' || github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vid2text-windows-x64
+          path: |
+            ${{ steps.archive.outputs.zip }}
+            ${{ steps.archive.outputs.zip }}.sha256
+          if-no-files-found: error
+          retention-days: 7
       - name: Publish release
+        if: github.event_name == 'push' && github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_ZIP: ${{ steps.archive.outputs.zip }}
         run: |
-          $zip = "Vid2text-$env:GITHUB_REF_NAME-windows-x64.zip"
+          $zip = $env:RELEASE_ZIP
           gh release create $env:GITHUB_REF_NAME $zip "$zip.sha256" --repo $env:GITHUB_REPOSITORY --verify-tag --generate-notes

@@ -67,6 +67,8 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-The [Windows release workflow](.github/workflows/release.yml) builds and smoke-tests the executable, then publishes the ZIP and its SHA-256 checksum. It uses a standard GitHub-hosted Windows runner, which is free for public repositories. [GitHub runner pricing](https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories)
+The [Windows release workflow](.github/workflows/release.yml) builds and smoke-tests the executable on every push to `master`. You can also start a build under **Actions → Windows release → Run workflow**. Download the ZIP and SHA-256 checksum from the run's **Artifacts** section.
+
+When you push a version tag, the same workflow publishes the ZIP and checksum under **Releases**. It uses a standard GitHub-hosted Windows runner, which is free for public repositories. [GitHub runner pricing](https://docs.github.com/en/actions/reference/runners/github-hosted-runners#standard-github-hosted-runners-for-public-repositories)
 
 Built with [Faster Whisper](https://github.com/SYSTRAN/faster-whisper), [PyAV](https://github.com/PyAV-Org/PyAV), and [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx).
